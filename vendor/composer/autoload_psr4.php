@@ -6,5 +6,5 @@ $vendorDir = dirname(dirname(__FILE__));
 $baseDir = dirname($vendorDir);
 
 return array(
-    'EP\\' => array($baseDir . '/ep_vendor/EP'),
+    'EPS\\' => array($baseDir . '/epserver/src'),
 );
