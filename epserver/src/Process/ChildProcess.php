@@ -2,7 +2,9 @@
 
 namespace EPS\Process;
 
-use EPS\Event\Emitter;
+use EPS\Event\ProcessCheckParent;
+use EPS\Event\ProcessRestart;
+use EPS\Standard\Emitter;
 
 class ChildProcess extends Emitter
 {
@@ -12,64 +14,98 @@ class ChildProcess extends Emitter
     public $ppid = 0;
     protected $worker = null;
     protected $params = [];
+    protected $restart = true;
+    protected $isMain = false;
+    protected $isDaemon = false;
 
-    public static function instance($workerName, $porcessName = 'epserver')
+    public static function instance($porcessName = 'epserver', $restart = true)
     {
-        return new static($workerName, $porcessName);
+        return new static($porcessName, $restart);
     }
 
-    public function __construct($workerName, $porcessName = 'epserver')
+    public function __construct($porcessName = 'epserver', $restart = true)
     {
-        $this->workerName = $workerName;
         $this->porcessName = $porcessName;
+        $this->restart     = $restart;
     }
 
-    public function setParams($param = [])
+    public function setWorker($worker, $param = [])
     {
+        $this->workerName = $worker;
         $this->params = $param;
+        return $this;
     }
 
-    public function init()
+    public function setDaemon()
+    {
+        $this->isDaemon = true;
+        return $this;
+    }
+
+    public function setMain()
+    {
+        $this->isMain = true;
+        return $this;
+    }
+
+    protected function init()
     {
         $this->pid = posix_getpid();
         $this->ppid = posix_getppid();
         cli_set_process_title(sprintf('%s(%s)', $this->porcessName, $this->workerName));
-        $name = $this->workerName;
-        $this->worker = new $name($this);
-        if ($this->params && method_exists($this->worker, 'setParams')) {
-            call_user_func_array([$this->worker, 'setParams'], $this->params);
-        }
-        return $this;
-    }
-
-    public function checkParentProcess()
-    {
-        $ppid = posix_getpid();
-        if ($ppid != $this->ppid) {
-            exit(0);
-        }
-        $this->ppid = $ppid;
     }
 
     public function run()
     {
-
+        $this->init();
+        //为自己时
+        if ($this->isMain)
+        {
+            if ($this->isDaemon) {
+                $this->fork(true);
+            } else {
+                $this->runWorker();
+            }
+        } else {
+            $this->fork(false);
+        }
     }
 
-    public function fork()
+    protected function runWorker()
+    {
+        try {
+            $ref = new \ReflectionClass($this->workerName);
+            $this->worker = $ref->newInstanceArgs($this->params);
+            if (method_exists($this->worker, 'start')) {
+                $this->worker->start();
+            }
+            \Ev::run();//没有事件时会退？？？
+        } catch (\Exception $e){
+            //异常
+            echo $e->getMessage();
+        }
+    }
+
+    protected function fork($parentExit = false)
     {
         $pid = pcntl_fork();
         if ($pid == -1) {
-            $this->emit('Fork.Error', [$this]);
-            return false;
+            throw new \Exception(sprintf('%s fork fail', $this->porcessName), 1);
         } elseif ($pid === 0) {
-            $this->init();
-            $this->run();
+            //父进程退出时自动自动关闭
+            $this->isDaemon or ProcessCheckParent::instance($this);
+            $this->runWorker();
         } else {
-            $this->ppid = posix_getpid();
-            $this->pid = $pid;
+            if ($parentExit) {
+                exit(0);
+            } else {
+                $this->pid = $pid;
+                $this->ppid = posix_getpid();
+                if ($this->restart) {
+                    ProcessRestart::instance($this);
+                }
+                \Ev::run();
+            }
         }
-        $this->emit('Fork.Success', [$this]);
-        return $pid;
     }
 }

@@ -16,11 +16,16 @@ class Message
         $this->resource = msg_get_queue($this->id, $this->perms);
     }
 
-    public function send($data, $blocking = false)
+    public function send($data, $blocking = true)
     {
         $error = 0;
         $type = 1;
+
         $r = msg_send($this->resource, $type, $data, false, $blocking, $error);
+        if (!$r) {
+            var_dump(msg_stat_queue($this->resource));
+            exit;
+        }
         return $r;
     }
 
