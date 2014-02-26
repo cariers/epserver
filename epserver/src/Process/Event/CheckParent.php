@@ -1,8 +1,8 @@
 <?php
 
-namespace EPS\Event;
+namespace EPS\Process\Event;
 
-class ProcessCheckParent
+class CheckParent
 {
     public static function instance($process)
     {

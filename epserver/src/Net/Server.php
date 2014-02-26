@@ -22,11 +22,24 @@ class Server extends Emitter
     protected $server = null;
     protected $openTask = false;
     protected $thisIndex = 0;
+    protected $config = 0;
     protected static $index = 0;
 
-    public function __construct()
+    public static function instance($config)
     {
+        return new static($config);
+    }
+
+    public function __construct($config = [])
+    {
+        $defaultConfig = [
+            'worker_num' => 4,
+            'writer_num' => 4,
+            'poll_thread_num' => 4,
+            'dispatch_mode' => 2
+        ];
         static::$index ++;
+        $this->config = array_merge($defaultConfig, $config);
         $this->thisIndex = static::$index;
     }
 
@@ -35,7 +48,7 @@ class Server extends Emitter
         return $this->thisIndex;
     }
 
-    public function openAsyncBroadcast($nums)
+    public function openBroadcast($nums)
     {
         $this->openTask = $nums;
         return $this;
@@ -55,12 +68,7 @@ class Server extends Emitter
     {
         if (!$this->isInit)
         {
-            $config = [
-                'worker_num' => 4,
-                'writer_num' => 4,
-                'poll_thread_num' => 4,
-                'dispatch_mode' => 2
-            ];
+            $config = $this->config;
             if ($this->openTask) {
                 $config['task_worker_num'] = $this->openTask;
             }
@@ -93,7 +101,9 @@ class Server extends Emitter
 
     public function broadcast($data)
     {
-        return $this->server->task($data);
+        Debug::info('serer broadcast %d>>%s', $this->thisIndex, $data);
+        $id = $this->server->task($data);
+        Debug::info('serer broadcast %d>>TaskId %d', $this->thisIndex, $id);
     }
 
     public function send($guid, $data)
@@ -171,6 +181,7 @@ class Server extends Emitter
         $title = cli_get_process_title();
         list($main, $last) = explode('->', $title);
         cli_set_process_title($main . '->' . 'reactor');
+        $this->emit('Start', []);
     }
 
     public function onWorkerStart($serv, $worker_id)
@@ -187,6 +198,7 @@ class Server extends Emitter
 
     public function onTask($serv, $fd, $fromId, $data)
     {
+        Debug::info('onTask broadcast %d>>%s', $this->thisIndex, $data);
         $this->emit('Broadcast', [$data, $this]);
     }
 }

@@ -4,7 +4,7 @@
  * (c) Evenlaz <evenlaz@gmail.com>
  */
 
-namespace EPS\Standard;
+namespace EPS\Event;
 
 /**
  * 事件接口

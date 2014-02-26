@@ -1,6 +1,8 @@
 <?php
 
-namespace Server\Process\Lib;
+namespace Server\Logic;
+
+use EPS\Standard\Debug;
 
 class Broadcast
 {

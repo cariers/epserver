@@ -4,14 +4,14 @@ namespace Server\Process;
 
 class Gateway
 {
-    public function __construct($process)
+    protected $server;
+    public function __construct($server)
     {
-
+        $this->server = $server;
     }
 
-    public function setParams($server)
+    public function start()
     {
-        //while(true);
-        $server->start();
+        $this->server->start();
     }
 }

@@ -2,9 +2,11 @@
 
 namespace EPS\Process;
 
-use EPS\Event\ProcessCheckParent;
-use EPS\Event\ProcessRestart;
-use EPS\Standard\Emitter;
+use EPS\Process\Event\CheckParent;
+use EPS\Process\Event\Restart;
+use EPS\Process\Event\MainLoop;
+use EPS\Event\Emitter;
+use EPS\Standard\Debug;
 
 class ChildProcess extends Emitter
 {
@@ -12,7 +14,7 @@ class ChildProcess extends Emitter
     public $porcessName = '';
     public $pid = 0;
     public $ppid = 0;
-    protected $worker = null;
+    public $worker = null;
     protected $params = [];
     protected $restart = true;
     protected $isMain = false;
@@ -57,13 +59,13 @@ class ChildProcess extends Emitter
 
     public function run()
     {
-        $this->init();
         //为自己时
         if ($this->isMain)
         {
             if ($this->isDaemon) {
                 $this->fork(true);
             } else {
+                $this->init();
                 $this->runWorker();
             }
         } else {
@@ -79,10 +81,14 @@ class ChildProcess extends Emitter
             if (method_exists($this->worker, 'start')) {
                 $this->worker->start();
             }
-            \Ev::run();//没有事件时会退？？？
+            Debug::info('Fork worker4: %s', $this->workerName);
+            //主进程实现轮询
+            $this->isMain and MainLoop::instance($this);
+            Debug::info('Fork worker5: %s', $this->workerName);
+            \Ev::run();
         } catch (\Exception $e){
             //异常
-            echo $e->getMessage();
+            Debug::error('runWorker error: %s', $e->getMessage());
         }
     }
 
@@ -92,8 +98,12 @@ class ChildProcess extends Emitter
         if ($pid == -1) {
             throw new \Exception(sprintf('%s fork fail', $this->porcessName), 1);
         } elseif ($pid === 0) {
-            //父进程退出时自动自动关闭
-            $this->isDaemon or ProcessCheckParent::instance($this);
+            //非主进程时，自动退出进程
+            Debug::info('Fork worker: %s', $this->workerName);
+            $this->init();
+            Debug::info('Fork worker2: %s', $this->workerName);
+            $this->isMain or CheckParent::instance($this);
+            Debug::info('Fork worker3: %s', $this->workerName);
             $this->runWorker();
         } else {
             if ($parentExit) {
@@ -102,9 +112,9 @@ class ChildProcess extends Emitter
                 $this->pid = $pid;
                 $this->ppid = posix_getpid();
                 if ($this->restart) {
-                    ProcessRestart::instance($this);
+                    Restart::instance($this);
                 }
-                \Ev::run();
+                $this->isMain and \Ev::run();
             }
         }
     }

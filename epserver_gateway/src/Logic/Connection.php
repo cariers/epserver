@@ -1,8 +1,9 @@
 <?php
 
-namespace Server\Process\Lib;
+namespace Server\Logic;
 
 use EPS\Standard\Debug;
+use EPS\Standard\GlobalShard;
 
 class Connection
 {
@@ -19,8 +20,9 @@ class Connection
     public function onData($guid, $data, $serv)
     {
         //写入到要读写的
-        //GlobalShard::get('MsgIdForGatewayRecv')->send($data);
+        $data = str_replace(["\n", "\r"], '', $data);
         Debug::info('client data %s:%s', $guid, $data);
-        $serv->send($guid, intval($data) + 1);
+        GlobalShard::get('GatewayRecvMsg')->send($data);
+        //$serv->send($guid, intval($data) + 1);
     }
 }

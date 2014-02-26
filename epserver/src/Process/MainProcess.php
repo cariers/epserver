@@ -2,15 +2,17 @@
 
 namespace EPS\Process;
 
-use EPS\Event\Emitter;
-
 class MainProcess extends ChildProcess
 {
-    public function fork()
+    public static function instance($porcessName = 'epserver', $restart = true)
     {
-        $this->init();
-        $this->run();
-        $this->emit('Fork.Success', [$this]);
-        return $this->pid;
+        return new static($porcessName, $restart);
+    }
+
+    public function __construct($porcessName = 'epserver', $restart = true)
+    {
+        $this->porcessName = $porcessName;
+        $this->restart     = false;
+        $this->isMain = true;
     }
 }
