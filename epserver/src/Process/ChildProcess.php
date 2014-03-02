@@ -7,6 +7,7 @@ use EPS\Process\Event\Restart;
 use EPS\Process\Event\MainLoop;
 use EPS\Event\Emitter;
 use EPS\Standard\Debug;
+use EPS\Event\Loop;
 
 class ChildProcess extends Emitter
 {
@@ -19,6 +20,7 @@ class ChildProcess extends Emitter
     protected $restart = true;
     protected $isMain = false;
     protected $isDaemon = false;
+    protected static $processLists = [];
 
     public static function instance($porcessName = 'epserver', $restart = true)
     {
@@ -81,14 +83,14 @@ class ChildProcess extends Emitter
             if (method_exists($this->worker, 'start')) {
                 $this->worker->start();
             }
-            Debug::info('Fork worker4: %s', $this->workerName);
             //主进程实现轮询
-            $this->isMain and MainLoop::instance($this);
-            Debug::info('Fork worker5: %s', $this->workerName);
-            \Ev::run();
+            if ($this->isMain) {
+                MainLoop::instance($this);
+            }
+            Loop::run();
         } catch (\Exception $e){
             //异常
-            Debug::error('runWorker error: %s', $e->getMessage());
+            Debug::excep('runWorker error: %s', $e->getMessage());
         }
     }
 
@@ -99,11 +101,8 @@ class ChildProcess extends Emitter
             throw new \Exception(sprintf('%s fork fail', $this->porcessName), 1);
         } elseif ($pid === 0) {
             //非主进程时，自动退出进程
-            Debug::info('Fork worker: %s', $this->workerName);
             $this->init();
-            Debug::info('Fork worker2: %s', $this->workerName);
             $this->isMain or CheckParent::instance($this);
-            Debug::info('Fork worker3: %s', $this->workerName);
             $this->runWorker();
         } else {
             if ($parentExit) {
@@ -114,8 +113,16 @@ class ChildProcess extends Emitter
                 if ($this->restart) {
                     Restart::instance($this);
                 }
-                $this->isMain and \Ev::run();
+                static::$processLists[$this->pid] = $this;
+                $this->isMain and Loop::run();
             }
         }
+    }
+
+    public static function reStart($pid)
+    {
+        $process = static::$processLists[$pid];
+        unset(static::$processLists[$pid]);
+        $process->run();
     }
 }

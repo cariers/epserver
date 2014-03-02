@@ -2,15 +2,16 @@
 
 namespace EPS\Process\Event;
 
+use EPS\Event\Loop;
+
 class CheckParent
 {
     public static function instance($process)
     {
-        $ev = new \EvTimer(0., 1, function($w) use ($process){
+        return Loop::addScTimer(function() use ($process) {
             if ($process->ppid !== posix_getppid()) {
                 exit(0);
             }
-        });
-        return $ev;
+        }, 1);
     }
 }

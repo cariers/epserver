@@ -2,15 +2,16 @@
 
 namespace EPS\Process\Event;
 
+use EPS\Event\Loop;
+
 class MainLoop
 {
     public static function instance($process)
     {
-        $ev = new \EvTimer(0., 1, function($w) use ($process){
+        return Loop::addScTimer(function() use ($process) {
             if (method_exists($process->worker, 'loop')) {
                 $process->worker->loop();
             }
-        });
-        return $ev;
+        }, 1);
     }
 }

@@ -32,7 +32,7 @@ class Debug
     protected static function out($msg, $type)
     {
         $msg = sprintf('[%s][%5s][%05d]>>%s', date('Y-m-d H:i:s'), $type, posix_getpid(), $msg);
-        //echo $msg . PHP_EOL;
+        echo $msg . PHP_EOL;
         error_log($msg . PHP_EOL, 3, LOG_FILE);
     }
 }
