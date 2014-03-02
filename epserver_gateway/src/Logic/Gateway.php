@@ -28,7 +28,7 @@ class Gateway
         $data = str_replace(["\n", "\r"], '', $data);
         Debug::info('Client OnData %s >> %s', $sid, $data);
         if (strrpos($data, 'boardcast') !== false) {
-            $this->server->boardcast($data);
+            $this->server->boardcast($data. PHP_EOL);
         } else {
             $this->server->send($sid, 'you say:'. $data . PHP_EOL);
         }
