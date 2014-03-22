@@ -2,72 +2,109 @@
 =====
 
 * 事件驱动
-* 进程管理
-* 多种服务
+* 多进程逻辑
+* 配置驱动
+
+依赖扩展
+-----
+* [PHP 5.5](http://php.net)
+* [swoole](https://github.com/matyhtf/swoole)
+* pcntl --enable-pcntl
+* [libev](https://github.com/ewenlaz/php-libev)
+* System IPC --enable-sysvmsg --enable-sysvsem --enable-sysvshm
+
 
 Example
 -----
 
-__主进程__
+__多进程服务 [demo](https://github.com/ewenlaz/epserver/blob/master/epserver_demo/multi_process_server.php)__
 ```php
-use EPS\Process\MainProcess;
 define('SERVER_PATH', __DIR__ . '/');
-define('LOG_FILE', __DIR__ . '/ttt.log');
 $loader = include SERVER_PATH . '../autoload.php';
-MainProcess::instance('eps_main')
-    ->setWorker('Server\\Worker\\Main')
-    ->setMain()
-    //->setDaemon()
+
+use EPS\Bootstrap\MultiProcessServer;
+
+$server = [
+    'driver' => 'EPS\\Net\\ServerDriver\\Swoole',
+    'host' => '0.0.0.0',
+    'port' => 5501,
+    'type' => 'TCP',
+    'setting' => [
+        'worker_num' => 3,
+        'task_worker_num' => 3
+    ]
+];
+
+$dispatcher = [
+    'dispatcher' => 'EPS\\ServerDispatcher\\MessageDispatcher',
+    'acceptMessage' => [
+        'driver'  => 'EPS\\Driver\\Message\\SystemIPC',
+        'message' => 'Accept5501',
+        'option'  => [
+            'perms' => 0666,
+            'reset' => true
+        ]
+    ],
+    'sendMessage' => [
+        'driver'  => 'EPS\\Driver\\Message\\SystemIPC',
+        'message' => 'Send5501',
+        'option'  => [
+            'perms' => 0666,
+            'reset' => true
+        ]
+    ],
+    'receiveMessage' => [
+        'driver'  => 'EPS\\Driver\\Message\\SystemIPC',
+        'message' => 'Receive5501',
+        'option'  => [
+            'perms' => 0666,
+            'reset' => true
+        ]
+    ],
+];
+
+$logic = [
+    'dispatchLogic' => 'Server\\Logic\\DispatchLogic',
+    'workerNum' => 3
+];
+//MultiProcessServer::instance 第二个参数为 开启守护
+MultiProcessServer::instance('ep_multi_process_server')
+    ->setServerOption($server)
+    ->setServerDispatcherOption($dispatcher)
+    ->setLogicOption($logic)
     ->run();
 ```
 
-__启动网关服务__
+__分发逻辑 [demo](https://github.com/ewenlaz/epserver/blob/master/epserver_demo/src/Logic/DispatchLogic.php)__
 ```php
-namespace Server\Worker;
-use EPS\Process\WorkerProcess;
-class Main
-{
-    public function __construct()
-    {
-    }
-    public function start()
-    {
-        //启动网关进程
-        WorkerProcess::instance('eps_gateway')
-            ->setWorker('EPS\\Worker\\Gateway', ['Server\\Logic\\Gateway', 5501])
-            ->run();
-    }
-}
-```
+/**
+ * 简单服务开发框架>>EPS
+ * (c) Evenlaz <evenlaz@gmail.com>
+ */
 
-__网关逻辑__
-```php
 namespace Server\Logic;
-use EPS\Standard\Debug;
-class Gateway
+
+use EPS\ServerDispatcher\AbstractDispatchLogic;
+
+class DispatchLogic extends AbstractDispatchLogic
 {
-    public function __construct($server)
-    {
-        $this->server = $server;
+    public function onAccept($sid, $connection) {
+        echo sprintf("accept[%s]>>%s[%d]\n", $sid, $connection->ip, $connection->port);
+        $this->send($sid, 'hello ' . $sid . "\n");
+        $this->boardcast($sid . ' join room ~' . "\n");
     }
-    public function onConnect($sid, $connection)
-    {
-        Debug::info('Client Connect %s >> %s[%d]', $sid, $connection->ip, $connection->port);
-        $this->server->send($sid, 'hello epserver!' . PHP_EOL);
-    }
-    public function onClose($sid)
-    {
-        Debug::info('Client Close %s', $sid);
-    }
-    public function onReceive($sid, $data)
-    {
+    public function onReceive($sid, $data) {
         $data = str_replace(["\n", "\r"], '', $data);
-        Debug::info('Client OnData %s >> %s', $sid, $data);
-        if (strrpos($data, 'boardcast') !== false) {
-            $this->server->boardcast($data);
+        if ($data == 'close') {
+            $this->boardcast($sid . ' logout' . "\n");
+            $this->close($sid);
         } else {
-            $this->server->send($sid, 'you say:'. $data . PHP_EOL);
+            $this->send($sid, 'you say ' . $data . "\n");
         }
+        echo sprintf("receive[%s]>>%s\n", $sid, $data);
+    }
+    public function onClose($sid, $connection) {
+        echo sprintf("close[%s]>>%s[%d]\n", $sid, $connection->ip, $connection->port);
     }
 }
 ```
